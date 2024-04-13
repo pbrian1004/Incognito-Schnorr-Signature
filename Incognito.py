@@ -22,10 +22,7 @@ my_curve = curve.P256
 g = my_curve.G
 p = my_curve.q
 generator_u = g * secrets.randbelow(p)
-
-new_curve1 = curve.P256
-h = new_curve1.G
-
+h = g * secrets.randbelow(p)
 
 # define basic operation
 # int(c, 16) is to convert hexadecmical strings to actual numbers, I don't think it would limit the size of the number
@@ -149,16 +146,13 @@ def Sign(PK, j, sigma):
     pi_z = [Rz, sz, s_beta]
 
     ### 3. ZK Proof for b
-    ##### generators h, (g1, ..., gn), and (h1, ..., hn) are all equals to g #####
     g_array = [None] * len(PK)
     h_array = [None] * len(PK)
     sa = [None] * len(PK)
     sb = [None] * len(PK)
     for i in range (len(PK)):
-        new_curve2 = curve.P256
-        g_array[i] = new_curve2.G
-        new_curve3 = curve.P256
-        h_array[i] = new_curve3.G
+        g_array[i] = g * secrets.randbelow(p)
+        h_array[i] = g * secrets.randbelow(p)
         sa[i] = secrets.randbelow(p)
         sb[i] = secrets.randbelow(p)
 
