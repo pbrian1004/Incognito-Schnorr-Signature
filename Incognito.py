@@ -24,6 +24,7 @@ p = my_curve.q
 generator_u = g * secrets.randbelow(p)
 h = g * secrets.randbelow(p)
 
+
 # define basic operation
 # int(c, 16) is to convert hexadecmical strings to actual numbers, I don't think it would limit the size of the number
 def A(r):
@@ -234,22 +235,29 @@ for ii in range (0, PK_num):
     if Verify("I am ", fake_PK, Incog) != 1:
         print ("Incognito failed")
 
-
-power_of_2 = 10
-PK_num = 2 ** power_of_2
-time_trail = 1
-fake_PK = [None]* (PK_num)
-for i in range (0, PK_num):
-#     fill it with fake first, then change later
-    foo, fake_PK[i] = KeyGen()
-ssk, ppk = KeyGen()
-for ii in range (time_trail):
-    start_time = time.time()
-    random_position = secrets.randbelow(PK_num)
-    my_sk, fake_PK[random_position] = ssk, ppk
-    hh = Schnorr_SIGN("I am ", my_sk)
-    Incog = Sign(fake_PK, random_position, hh)
-    if Verify("I am ", fake_PK, Incog) != 1:
-        print ("Incognito failed")
-        # break
-    print('total time elaspsed ', time.time() - start_time)
+for power_of_2 in range (0, 12):
+    sign_sum = 0
+    verify_sum = 0
+    PK_num = 2 ** power_of_2
+    time_trail = 1
+    fake_PK = [None]* (PK_num)
+    for i in range (0, PK_num):
+    #     fill it with fake first, then change later
+        foo, fake_PK[i] = KeyGen()
+    ssk, ppk = KeyGen()
+    for ii in range (time_trail):
+        start_time = time.time()
+        random_position = secrets.randbelow(PK_num)
+        my_sk, fake_PK[random_position] = ssk, ppk
+        hh = Schnorr_SIGN("I am ", my_sk)
+        Incog = Sign(fake_PK, random_position, hh)
+        sign_sum += time.time() - start_time
+        verify_start = time.time()
+        if Verify("I am ", fake_PK, Incog) != 1:
+            print ("Incognito failed")
+        verify_sum += time.time() - verify_start
+        
+    sign_average = sign_sum / time_trail
+    verify_average = verify_sum / time_trail 
+    print('2^' + str(power_of_2) + ' sign spends ' + str(sign_average) + 'seconds in average.')
+    print('2^' + str(power_of_2) + ' verify spends ' + str(verify_average) + 'seconds in average.')
