@@ -259,5 +259,65 @@ for power_of_2 in range (0, 12):
         
     sign_average = sign_sum / time_trail
     verify_average = verify_sum / time_trail 
-    print('2^' + str(power_of_2) + ' sign spends ' + str(sign_average) + 'seconds in average.')
-    print('2^' + str(power_of_2) + ' verify spends ' + str(verify_average) + 'seconds in average.')
+    print(str(2 ** power_of_2) + '. Basic Sign: ' + str(sign_average) + ', Basic Verify: ' + str(verify_average))
+
+
+# For Bulletproofs testing in Python, we need to download the python-bulletproofs package from https://github.com/wborgeaud/python-bulletproofs.
+# The Bulletproofs are only used to simulate the total implementation time, it doesn't interact with the Incognito Schnorr Signature.
+# Because PK = sk * G in the fastecdsa, the original P = (g ◦ pk^d)^l * h′^r becomes P = ⟨g + pk · d, l⟩ + ⟨h′, r⟩.
+# To implement Bulletproofs on Incognito Signature, replacing the exponent of witness l, r with the inner product is necessary as mentioned above.
+
+from src.innerproduct.inner_product_prover import *
+from src.innerproduct.inner_product_verifier import *
+from src.tests.test_innerprod import *
+
+def bulletproofs_sign(N):
+    seeds = [os.urandom(10) for _ in range(6)]
+    point = CURVE.q
+    g = [elliptic_hash(str(i).encode() + seeds[0], CURVE) for i in range(N)]
+    h = [elliptic_hash(str(i).encode() + seeds[1], CURVE) for i in range(N)]
+    u = elliptic_hash(seeds[2], CURVE)
+    a = [mod_hash(str(i).encode() + seeds[3], point) for i in range(N)]
+    b = [mod_hash(str(i).encode() + seeds[4], point) for i in range(N)]
+    P = vector_commitment(g, h, a, b)
+    c = inner_product(a, b)
+    Prov = NIProver(g, h, u, P, c, a, b, CURVE, seeds[5])
+    proof = Prov.prove()
+    parameters = [g, h, u, P, c]
+    return parameters, proof
+
+def bulletproofs_verify(sigma):
+    parameters = sigma[0]
+    proof = sigma[1]
+    [g, h, u, P, c] = parameters
+    Verif = Verifier1(g, h, u, P, c, proof)
+    return Verif.verify()
+
+for power_of_2 in range (0, 12):
+    sign_sum = 0
+    verify_sum = 0
+    PK_num = 2 ** power_of_2
+    time_trail = 100
+    fake_PK = [None]* (PK_num)
+    for i in range (0, PK_num):
+    #     fill it with fake first, then change later
+        foo, fake_PK[i] = KeyGen()
+    ssk, ppk = KeyGen()
+    for ii in range (time_trail):
+        start_time = time.time()
+        random_position = secrets.randbelow(PK_num)
+        my_sk, fake_PK[random_position] = ssk, ppk
+        hh = Schnorr_SIGN("I am ", my_sk)
+        Incog = Sign(fake_PK, random_position, hh)
+        test_only_bulletproofs = bulletproofs_sign(PK_num)
+        sign_sum += time.time() - start_time
+        verify_start = time.time()
+        if Verify("I am ", fake_PK, Incog) != 1:
+            print ("Incognito failed")
+        if not bulletproofs_verify(test_only_bulletproofs):
+            print ("Bulletproofs failed")
+        verify_sum += time.time() - verify_start
+        
+    sign_average = sign_sum / time_trail
+    verify_average = verify_sum / time_trail 
+    print(str(2 ** power_of_2) + '. Full Sign: ' + str(sign_average) + ', Full Verify: ' + str(verify_average))
