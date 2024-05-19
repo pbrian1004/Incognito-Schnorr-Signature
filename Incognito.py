@@ -55,7 +55,12 @@ def hadamard_powers(base, power):
     for i in range (len(base)):
         hp[i] = base[i] ** power[i]
     return hp
-def inner_products(a, b):
+def inner_products_zp(a, b):
+    ip = 0
+    for i in range (len(a)):
+        ip = (a[i] * b[i] + ip) % p
+    return ip
+def inner_products_point(a, b):
     for i in range (len(a)):
         if i == 0:
             ip = a[i] * b[i]
@@ -66,6 +71,11 @@ def consecutive_powers(y, n):
     yn = [None] * n
     for i in range (n):
         yn[i] = y ** i
+    return yn
+def inverse_consecutive_powers(y, n):
+    yn = [None] * n
+    for i in range (n):
+        yn[i] = y ** -i
     return yn
     
 # setup function, not actually called since parameter are already defined
@@ -139,53 +149,53 @@ def Sign(PK, j, sigma):
     rz = secrets.randbelow(p)
     rb = secrets.randbelow(p)
     c = int(c, 16)
-    Rz = g * rz + g0 * rb * c
+    Rz = g * rz + g0 * ((rb * c)%p)
     cz = sha256((str(Rz) + str(Cpk)).encode()).hexdigest()
-    cz = int(cz, 16)
+    cz = (int(cz, 16)) % p
     sz = (rz + cz * z) % p
     s_beta = (rb + cz * beta) % p
     pi_z = [Rz, sz, s_beta]
 
     ### 3. ZK Proof for b
-    g_array = [None] * len(PK)
-    h_array = [None] * len(PK)
     sa = [None] * len(PK)
     sb = [None] * len(PK)
     for i in range (len(PK)):
-        g_array[i] = g * secrets.randbelow(p)
-        h_array[i] = g * secrets.randbelow(p)
         sa[i] = secrets.randbelow(p)
         sb[i] = secrets.randbelow(p)
 
     alpha = secrets.randbelow(p)
     rho = secrets.randbelow(p)
     zeta = secrets.randbelow(p)
-    A = h * alpha + inner_products(g_array, b_array) + inner_products(h_array, a_array)
-    S = h * rho + inner_products(g_array, sb) + inner_products(h_array, sa)
-    Spk = g0 * zeta + inner_products(PK, sb)
-    y = int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(1)).encode()).hexdigest(), 16)
-    w = int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(2)).encode()).hexdigest(), 16)
+    A = h * alpha + inner_products_point(g_array, b_array) + inner_products_point(h_array, a_array)
+    S = h * rho + inner_products_point(g_array, sb) + inner_products_point(h_array, sa)
+    Spk = g0 * zeta + inner_products_point(PK, sb)
+    y = (int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(1)).encode()).hexdigest(), 16)) % p
+    w = (int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(2)).encode()).hexdigest(), 16)) % p
 
     yn = consecutive_powers(y, len(PK))
-    t0 = (w ** 2) - (w ** 3)
     In = [1] * len(PK)
     wn = [w*i for i in In]
     w2n = [(w**2)*i for i in In]
     tau1 = secrets.randbelow(p)
     tau2 = secrets.randbelow(p)
-    t1 = inner_products(sb, vector_addition(hadamard_products(yn, vector_addition(a_array, wn)), w2n)) 
-    + inner_products(vector_minus(b_array, wn), hadamard_products(yn, sa))
-    t2 = inner_products(sb, hadamard_products(yn, sa))
+    t0 = (w**2) - (w**3)*len(PK) + (w - w**2)*inner_products_zp(In, yn)
+    t1 = inner_products_zp(sb, vector_addition(hadamard_products(yn, vector_addition(a_array, wn)), w2n)) + inner_products_zp(vector_minus(b_array, wn), hadamard_products(yn, sa))
+    t2 = inner_products_zp(sb, hadamard_products(yn, sa))
     T1 = g * t1 + h * tau1
     T2 = g * t2 + h * tau2
 
-    x = int(sha256((str(T1) + str(T2) + str(y) + str(w)).encode()).hexdigest(), 16)
+    x = (int(sha256((str(T1) + str(T2) + str(y) + str(w)).encode()).hexdigest(), 16)) % p
     Lx = vector_addition(vector_minus(b_array, wn), [x*i for i in sb])
     Rx = vector_addition(hadamard_products(yn, vector_addition([x*i for i in sa], vector_addition(a_array, wn))), w2n)
-    tx = t0 + t1 * x + t2 * (x**2)
-    tau_x = tau2 * (x**2) + tau1 * x
-    mu = alpha + rho * x
-    nu = beta + zeta * x
+    tx = (t0 + t1 * x + t2 * (x**2)) % p
+    tau_x = (tau2 * (x**2) + tau1 * x) % p
+    mu = (alpha + rho * x) % p
+    nu = (beta + zeta * x) % p
+    # d = (int(sha256((str(x) + str(tau_x) + str(mu) + str(nu) + str(tx)).encode()).hexdigest(), 16)) % p
+    # dn = [d*i for i in In]
+    # iyn = inverse_consecutive_powers(y, len(PK))
+    # h_ = hadamard_products(h_array, iyn)
+    # P = inner_products_point(vector_addition(hadamard_products(PK, dn), g_array), Lx) + inner_products_point(h_, Rx)
     pi_b = [A, S, Spk, T1, T2, tau_x, mu, nu, tx, Lx, Rx]
 
     return (R, Cpk, pi_z, pi_b)
@@ -205,7 +215,10 @@ def Verify(m, PK, sigma):
     g0 = int(g0, 16) * g
     c = int(c, 16)
     cz = sha256((str(Rz) + str(Cpk)).encode()).hexdigest()
-    cz = int(cz, 16)
+    cz = (int(cz, 16)) % p
+    y = (int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(1)).encode()).hexdigest(), 16)) % p
+    In = [1] * len(PK)
+    yn = consecutive_powers(y, len(PK))
     
     if g*sz + g0*s_beta*c != Rz + R*cz + Cpk*c*cz:
         print('original pi_z verification failed')
@@ -214,15 +227,23 @@ def Verify(m, PK, sigma):
     y = int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(1)).encode()).hexdigest(), 16)
     w = int(sha256((str(A) + str(S) + str(Spk) + str(g0) + str(Cpk) + str(2)).encode()).hexdigest(), 16)
     x = int(sha256((str(T1) + str(T2) + str(y) + str(w)).encode()).hexdigest(), 16)
-    if g*tx + h*tau_x != g*((w ** 2) - (w ** 3)) + T1*x + T2*(x**2):
+    if g*tx + h*tau_x != g*((w**2) - (w**3)*len(PK) + (w - w**2)*inner_products_zp(In, yn)) + T1*x + T2*(x**2):
         print('original pi_b verification failed')
         return 0 
 
+    if tx != inner_products_zp(Lx, Rx):
+        print('original t_x verification failed')
+        return 0
+        
     return 1
-
 
 # testing
 PK_num = 20
+g_array = [None] * PK_num
+h_array = [None] * PK_num
+for i in range (PK_num):
+    g_array[i] = g * secrets.randbelow(p)
+    h_array[i] = g * secrets.randbelow(p)
 for ii in range (0, PK_num):
     fake_PK = [None]* (PK_num)
     for i in range (0, PK_num):
@@ -240,6 +261,11 @@ for power_of_2 in range (0, 12):
     verify_sum = 0
     PK_num = 2 ** power_of_2
     time_trail = 1
+    g_array = [None] * PK_num
+    h_array = [None] * PK_num
+    for i in range (PK_num):
+        g_array[i] = g * secrets.randbelow(p)
+        h_array[i] = g * secrets.randbelow(p)
     fake_PK = [None]* (PK_num)
     for i in range (0, PK_num):
     #     fill it with fake first, then change later
@@ -298,6 +324,11 @@ for power_of_2 in range (0, 12):
     verify_sum = 0
     PK_num = 2 ** power_of_2
     time_trail = 100
+    g_array = [None] * PK_num
+    h_array = [None] * PK_num
+    for i in range (PK_num):
+        g_array[i] = g * secrets.randbelow(p)
+        h_array[i] = g * secrets.randbelow(p)
     fake_PK = [None]* (PK_num)
     for i in range (0, PK_num):
     #     fill it with fake first, then change later
