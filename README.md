@@ -1,2 +1,3 @@
 Implementation of Incognito Schnorr Signature.
-Need to install the fastecdsa library (https://pypi.org/project/fastecdsa/) and download python-bulletproofs package (https://github.com/wborgeaud/python-bulletproofs).
+Must install the fastecdsa library (https://pypi.org/project/fastecdsa/).
+The src folder contains python-bulletproofs package (https://github.com/wborgeaud/python-bulletproofs).
